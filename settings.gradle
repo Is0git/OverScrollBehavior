@@ -1,0 +1,3 @@
+rootProject.name='OverScrollBehavior'
+include ':app'
+include ':overscrollbehavior'
