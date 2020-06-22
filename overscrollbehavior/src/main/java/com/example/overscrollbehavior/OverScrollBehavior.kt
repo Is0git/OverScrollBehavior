@@ -2,11 +2,12 @@ package com.example.overscrollbehavior
 
 import android.content.Context
 import android.util.AttributeSet
-import android.util.Log
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ProgressBar
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.children
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
 
 class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
@@ -16,12 +17,10 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
         private const val OVER_SCROLL_AREA = 4
     }
 
+    var overScrollListener: OverScrollListener? = null
     var verticalOffset = 0
-
     var appBarLayout: AppBarLayout? = null
-
     var progressBar: ProgressBar? = null
-
     private var overScrollY = 0
 
     override fun onLayoutChild(
@@ -31,9 +30,7 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
     ): Boolean {
         when (child) {
             is AppBarLayout -> appBarLayout = child
-            is ProgressBar -> progressBar = child
         }
-        Log.d("COORD", "PONLAY: ${child.javaClass.name}")
         return super.onLayoutChild(parent, child, layoutDirection)
     }
 
@@ -42,7 +39,6 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
         child: View,
         dependency: View
     ): Boolean {
-        Log.d("COORD", "Depends: ${child.javaClass.name}")
         for (a in parent.children) {
             if (a is AppBarLayout) {
                 appBarLayout = a
@@ -63,6 +59,7 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
     ): Boolean {
         overScrollY = 0
         super.onStartNestedScroll(coordinatorLayout, child, directTargetChild, target, axes, type)
+        if (target is RecyclerView && target.layoutManager?.childCount == 0) return false
         return true
     }
 
@@ -77,8 +74,8 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
         type: Int,
         consumed: IntArray
     ) {
-        Log.d("COORD", "VIEW: ${child.javaClass}")
-        if (dyUnconsumed == 0) {
+//        Log.d("SCROLLP", "SCROLL: ${child.javaClass}")
+        if (dyUnconsumed >= 0) {
             super.onNestedScroll(
                 coordinatorLayout,
                 child,
@@ -92,7 +89,8 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
             )
             return
         }
-        if (verticalOffset == 0) {
+        if (verticalOffset == 0 && target is RecyclerView) {
+            overScrollListener?.onOverScrollStart()
             progressBar?.visibility = View.VISIBLE
             overScrollY -= (dyUnconsumed / OVER_SCROLL_AREA)
             progressBar?.translationY = -overScrollY.toFloat()
@@ -107,37 +105,25 @@ class OverScrollBehavior(context: Context?, attributeSet: AttributeSet?) :
         type: Int
     ) {
         super.onStopNestedScroll(coordinatorLayout, child, target, type)
-        // Smooth animate to 0 when the user stops scrolling
-        moveToDefPosition(target)
-    }
-
-    override fun onNestedPreFling(
-        coordinatorLayout: CoordinatorLayout,
-        child: View,
-        target: View,
-        velocityX: Float,
-        velocityY: Float
-    ): Boolean {
-        super.onNestedPreFling(coordinatorLayout, child, target, velocityX, velocityY)
-        // Scroll view by inertia when current position equals to 0
-        if (overScrollY == 0) {
-            return false
+        if (target.translationY != 0f && verticalOffset == 0) {
+            if (target is RecyclerView && target.translationY < -10) overScrollListener?.onOverScrollCompleted()
+            moveToDefPosition(target)
         }
-        // Smooth animate to 0 when user fling view
-        moveToDefPosition(target)
-        return true
+        // Smooth animate to 0 when the user stops scrolling
+//        Log.d("SCROLLP", "STOP ${target.javaClass.name}")
     }
-
-
 
     private fun moveToDefPosition(target: View) {
         progressBar?.visibility = View.INVISIBLE
-        target.translationY = 0f
+        target.animate().translationY(0f).setInterpolator(AccelerateDecelerateInterpolator()).start()
     }
 
     override fun onOffsetChanged(appBarLayout: AppBarLayout?, verticalOffset: Int) {
         this.verticalOffset = -verticalOffset
     }
 
-
+    interface OverScrollListener {
+        fun onOverScrollCompleted()
+        fun onOverScrollStart()
+    }
 }
